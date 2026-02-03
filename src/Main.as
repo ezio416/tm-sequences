@@ -1,9 +1,8 @@
 bool                                 abort     = false;
 CGamePlaygroundUIConfig::EUISequence desiredSequence;
-string                               CurGameModeStr;
 bool                                 local     = false;
 bool                                 switching = false;
-string                               title     = "\\$36D" + Icons::Film + "\\$G Sequences";
+const string                         title     = "\\$36D" + Icons::Film + "\\$G Sequences";
 
 void RenderMenu() {
     if (UI::BeginMenu(title, local)) {
@@ -36,7 +35,7 @@ void RenderMenu() {
                 )
             )) {
                 desiredSequence = seq;
-                startnew(SetSequence);
+                startnew(SetSequenceAsync);
             }
         }
 
@@ -52,18 +51,8 @@ void Main() {
             and App.RootMap !is null
             and cast<CSmArenaClient>(App.CurrentPlayground) !is null
         ) {
-            auto Network = cast<CTrackManiaNetwork>(App.Network);
-            if (Network !is null) {
-                auto ServerInfo = cast<CTrackManiaNetworkServerInfo>(Network.ServerInfo);
-                if (ServerInfo !is null) {
-                    CurGameModeStr = ServerInfo.CurGameModeStr;
-                }
-            } else {
-                CurGameModeStr = "none";
-            }
-
             local = false
-                or CurGameModeStr.Contains("_Local")
+                or cast<CTrackManiaNetworkServerInfo>(App.Network.ServerInfo).CurGameModeStr.Contains("_Local")
                 or (true
                     and App.Editor !is null
                     and App.PlaygroundScript !is null
@@ -78,64 +67,49 @@ void Main() {
 }
 
 string GetSequence() {
-    auto App = cast<CTrackMania>(GetApp());
-
-    auto Playground = cast<CSmArenaClient>(App.CurrentPlayground);
-    if (false
-        or Playground is null
-        or Playground.UIConfigs.Length == 0
-    ) {
+    try {
+        return tostring((GetApp().CurrentPlayground).UIConfigs[0].UISequence);
+    } catch {
         return "null";
     }
-
-    CGamePlaygroundUIConfig@ Config = Playground.UIConfigs[0];
-    if (Config is null) {
-        return "null";
-    }
-
-    return tostring(Config.UISequence);
 }
 
-void SetSequence() {
+void SetSequenceAsync() {
     if (switching) {
         return;
     }
+
+    trace("changing sequence to " + tostring(desiredSequence));
 
     switching = true;
 
     auto App = cast<CTrackMania>(GetApp());
 
-    auto Script = cast<CSmArenaRulesMode>(App.PlaygroundScript);
-    if (Script is null) {
+    CGamePlaygroundUIConfig::EUISequence pre;
+
+    try {
+        pre = App.PlaygroundScript.UIManager.UIAll.UISequence;
+        App.PlaygroundScript.UIManager.UIAll.UISequence = desiredSequence;
+    } catch {
         switching = false;
         return;
     }
 
-    CGamePlaygroundUIConfigMgrScript@ Manager = Script.UIManager;
-    if (Manager is null) {
-        switching = false;
-        return;
-    }
+    try {
+        while (!App.PlaygroundScript.UIManager.UIAll.UISequenceIsCompleted) {
+            if (abort) {
+                abort = false;
+                break;
+            }
 
-    CGamePlaygroundUIConfig@ Config = Manager.UIAll;
-    if (Config is null) {
-        switching = false;
-        return;
-    }
-
-    CGamePlaygroundUIConfig::EUISequence Sequence = Config.UISequence;
-    Config.UISequence = desiredSequence;
-
-    while (!Config.UISequenceIsCompleted) {
-        if (abort) {
-            abort = false;
-            break;
+            yield();
         }
+    } catch { }
 
-        yield();
-    }
-
-    Config.UISequence = Sequence;
+    try {
+        trace("changing sequence back to " + tostring(pre));
+        App.PlaygroundScript.UIManager.UIAll.UISequence = pre;
+    } catch { }
 
     switching = false;
 }
