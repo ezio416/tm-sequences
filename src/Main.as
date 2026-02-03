@@ -1,8 +1,7 @@
-bool                                 abort     = false;
-CGamePlaygroundUIConfig::EUISequence desiredSequence;
-bool                                 local     = false;
-bool                                 switching = false;
-const string                         title     = "\\$36D" + Icons::Film + "\\$G Sequences";
+bool         abort     = false;
+bool         local     = false;
+bool         switching = false;
+const string title     = "\\$36D" + Icons::Film + "\\$G Sequences";
 
 void RenderMenu() {
     if (UI::BeginMenu(title, local)) {
@@ -15,7 +14,9 @@ void RenderMenu() {
             abort = true;
         }
 
-        string currentSequence = GetSequence();
+        UI::Separator();
+
+        const string currentSequence = GetSequence();
 
         for (uint i = 0; i < 12; i++) {
             auto seq = CGamePlaygroundUIConfig::EUISequence(i);
@@ -34,8 +35,7 @@ void RenderMenu() {
                     and !switching
                 )
             )) {
-                desiredSequence = seq;
-                startnew(SetSequenceAsync);
+                startnew(SetSequenceAsync, int64(seq));
             }
         }
 
@@ -74,12 +74,14 @@ string GetSequence() {
     }
 }
 
-void SetSequenceAsync() {
+void SetSequenceAsync(int64 s) {
     if (switching) {
         return;
     }
 
-    trace("changing sequence to " + tostring(desiredSequence));
+    const auto desired = CGamePlaygroundUIConfig::EUISequence(s);
+
+    trace("changing sequence to " + tostring(desired));
 
     switching = true;
 
@@ -89,8 +91,9 @@ void SetSequenceAsync() {
 
     try {
         pre = App.PlaygroundScript.UIManager.UIAll.UISequence;
-        App.PlaygroundScript.UIManager.UIAll.UISequence = desiredSequence;
+        App.PlaygroundScript.UIManager.UIAll.UISequence = desired;
     } catch {
+        error(getExceptionInfo());
         switching = false;
         return;
     }
@@ -104,12 +107,16 @@ void SetSequenceAsync() {
 
             yield();
         }
-    } catch { }
+    } catch {
+        error(getExceptionInfo());
+    }
 
     try {
         trace("changing sequence back to " + tostring(pre));
         App.PlaygroundScript.UIManager.UIAll.UISequence = pre;
-    } catch { }
+    } catch {
+        error(getExceptionInfo());
+    }
 
     switching = false;
 }
