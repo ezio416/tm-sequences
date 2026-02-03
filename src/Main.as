@@ -1,6 +1,3 @@
-// c 2023-12-26
-// m 2023-12-29
-
 bool abort = false;
 CGamePlaygroundUIConfig::EUISequence desiredSequence;
 string CurGameModeStr;
